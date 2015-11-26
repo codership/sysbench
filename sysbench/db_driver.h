@@ -141,6 +141,7 @@ typedef int drv_op_free_results(struct db_result_set *);
 typedef int drv_op_close(struct db_stmt *);
 typedef int drv_op_store_results(struct db_result_set *);
 typedef int drv_op_done(void);
+typedef int drv_op_last_committed_id(struct db_conn *, int session);
 
 typedef struct
 {
@@ -160,6 +161,7 @@ typedef struct
   drv_op_query           *query;          /* execute non-prepared statement */
   drv_op_store_results   *store_results;  /* store results from last query */
   drv_op_done            *done;           /* uninitialize driver */
+  drv_op_last_committed_id *last_committed_id;
 } drv_ops_t;
 
 /* Database driver definition */
@@ -270,6 +272,8 @@ db_result_set_t *db_execute(db_stmt_t *);
 db_row_t *db_fetch_row(db_result_set_t *);
 
 unsigned long long db_num_rows(db_result_set_t *);
+
+int db_last_committed_id(db_conn_t *, int session);
 
 db_result_set_t *db_query(db_conn_t *, const char *);
 

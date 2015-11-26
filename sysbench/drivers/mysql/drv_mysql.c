@@ -180,6 +180,7 @@ static int mysql_drv_free_results(db_result_set_t *);
 static int mysql_drv_close(db_stmt_t *);
 static int mysql_drv_store_results(db_result_set_t *);
 static int mysql_drv_done(void);
+static int mysql_drv_last_committed_id(db_conn_t *, int);
 
 /* MySQL driver definition */
 
@@ -204,7 +205,8 @@ static db_driver_t mysql_driver =
     mysql_drv_close,
     mysql_drv_query,
     mysql_drv_store_results,
-    mysql_drv_done
+    mysql_drv_done,
+    mysql_drv_last_committed_id
   },
   {0,0}
 };
@@ -845,6 +847,49 @@ int mysql_drv_fetch_row(db_result_set_t *rs, db_row_t *row)
   }
 
   return 0;
+}
+
+int mysql_drv_last_committed_id(db_conn_t *sb_conn, int session)
+{
+
+  db_mysql_conn_t *db_mysql_con;
+  MYSQL *con;
+  unsigned int rc;
+
+  if (args.dry_run)
+    return 0;
+
+  db_mysql_con = (db_mysql_conn_t *)sb_conn->ptr;
+  con = db_mysql_con->mysql;
+
+  char* Q = NULL;
+  if (session == 0)
+    Q = "SELECT WSREP_LAST_COMMITTED_ID(0)";
+  else
+    Q = "SELECT WSREP_LAST_COMMITTED_ID(1)";
+
+  rc = (unsigned int)mysql_real_query(con, Q, strlen(Q));
+  if (rc)
+  {
+    printf("failed to query last_committed_id\n");
+    return -1000;
+  }
+
+  MYSQL_RES *result = mysql_store_result(con);
+  if (result == NULL)
+  {
+    printf("failed to store result\n");
+    return -1001;
+  }
+
+  MYSQL_ROW row = mysql_fetch_row(result);
+  if (row == NULL)
+  {
+    printf("failed to fetch row\n");
+    return -1002;
+  }
+
+  return atoi(row[0]);
 }
 
 

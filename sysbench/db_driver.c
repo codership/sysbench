@@ -455,6 +455,10 @@ db_row_t *db_fetch_row(db_result_set_t *rs)
   return rs->row;
 }
 
+int db_last_committed_id(db_conn_t *con, int session)
+{
+  return con->driver->ops.last_committed_id(con, session);
+}
 
 /* Execute non-prepared statement */
 

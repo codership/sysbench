@@ -153,6 +153,8 @@ static int sb_lua_rand_gaussian(lua_State *);
 static int sb_lua_rand_special(lua_State *);
 static int sb_lua_rnd(lua_State *);
 static int sb_lua_rand_str(lua_State *);
+static int sb_lua_db_last_committed_id(lua_State *);
+
 
 /* Get a per-state interpreter context */
 static sb_lua_ctxt_t *sb_lua_get_context(lua_State *);
@@ -469,7 +471,10 @@ lua_State *sb_lua_new_state(const char *scriptname, int thread_id)
 
   lua_pushcfunction(state, sb_lua_db_free_results);
   lua_setglobal(state, "db_free_results");
-  
+
+  lua_pushcfunction(state, sb_lua_db_last_committed_id);
+  lua_setglobal(state, "db_last_committed_id");
+
   lua_pushnumber(state, SB_DB_ERROR_NONE);
   lua_setglobal(state, "DB_ERROR_NONE");
   lua_pushnumber(state, SB_DB_ERROR_RESTART_TRANSACTION);
@@ -1020,6 +1025,21 @@ int sb_lua_db_free_results(lua_State *L)
   rs->ptr = NULL;
   
   return 0;
+}
+
+int sb_lua_db_last_committed_id(lua_State *L)
+{
+  int session;
+  sb_lua_ctxt_t *ctxt;
+
+  ctxt = sb_lua_get_context(L);
+  CHECK_CONNECTION(L, ctxt);
+
+  session = luaL_checknumber(L, 1);
+  int id = db_last_committed_id(ctxt->con, session);
+  lua_pushnumber(L, (double)id);
+
+  return 1;
 }
 
 int sb_lua_rand(lua_State *L)
