@@ -141,7 +141,7 @@ typedef int drv_op_free_results(struct db_result_set *);
 typedef int drv_op_close(struct db_stmt *);
 typedef int drv_op_store_results(struct db_result_set *);
 typedef int drv_op_done(void);
-typedef int drv_op_last_committed_id(struct db_conn *, int session);
+typedef int drv_op_last_committed_id(struct db_conn *, int session, char* gtid, int len);
 
 typedef struct
 {
@@ -273,7 +273,7 @@ db_row_t *db_fetch_row(db_result_set_t *);
 
 unsigned long long db_num_rows(db_result_set_t *);
 
-int db_last_committed_id(db_conn_t *, int session);
+int db_last_committed_id(db_conn_t *, int session, char* gtid, int len);
 
 db_result_set_t *db_query(db_conn_t *, const char *);
 

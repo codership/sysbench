@@ -180,7 +180,7 @@ static int mysql_drv_free_results(db_result_set_t *);
 static int mysql_drv_close(db_stmt_t *);
 static int mysql_drv_store_results(db_result_set_t *);
 static int mysql_drv_done(void);
-static int mysql_drv_last_committed_id(db_conn_t *, int);
+static int mysql_drv_last_committed_id(db_conn_t *, int, char*, int);
 
 /* MySQL driver definition */
 
@@ -849,7 +849,7 @@ int mysql_drv_fetch_row(db_result_set_t *rs, db_row_t *row)
   return 0;
 }
 
-int mysql_drv_last_committed_id(db_conn_t *sb_conn, int session)
+int mysql_drv_last_committed_id(db_conn_t *sb_conn, int session, char* gtid, int len)
 {
 
   db_mysql_conn_t *db_mysql_con;
@@ -888,8 +888,15 @@ int mysql_drv_last_committed_id(db_conn_t *sb_conn, int session)
     printf("failed to fetch row\n");
     return -1002;
   }
+  unsigned long *lengths;
+  lengths = mysql_fetch_lengths(result);
+  if (((unsigned long)len) < lengths[0])
+  {
+    return -1003;
+  }
+  memcpy(gtid, row[0], lengths[0]);
 
-  return atoi(row[0]);
+  return lengths[0];
 }
 
 

@@ -1031,13 +1031,14 @@ int sb_lua_db_last_committed_id(lua_State *L)
 {
   int session;
   sb_lua_ctxt_t *ctxt;
+  char gtid[128];
 
   ctxt = sb_lua_get_context(L);
   CHECK_CONNECTION(L, ctxt);
 
   session = luaL_checknumber(L, 1);
-  int id = db_last_committed_id(ctxt->con, session);
-  lua_pushnumber(L, (double)id);
+  int len = db_last_committed_id(ctxt->con, session, &gtid, 128);
+  lua_pushlstring(L, gtid, len);
 
   return 1;
 }

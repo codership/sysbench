@@ -455,9 +455,9 @@ db_row_t *db_fetch_row(db_result_set_t *rs)
   return rs->row;
 }
 
-int db_last_committed_id(db_conn_t *con, int session)
+int db_last_committed_id(db_conn_t *con, int session, char* gtid, int len)
 {
-  return con->driver->ops.last_committed_id(con, session);
+  return con->driver->ops.last_committed_id(con, session, gtid, len);
 }
 
 /* Execute non-prepared statement */
