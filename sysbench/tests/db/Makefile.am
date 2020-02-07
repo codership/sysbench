@@ -23,4 +23,5 @@ dist_pkgdata_DATA = common.lua delete.lua insert.lua bulk_insert.lua \
              select_random_ranges.lua \
              select.lua \
              update_index.lua \
-             update_non_index.lua
+             update_non_index.lua \
+             update_blob.lua
