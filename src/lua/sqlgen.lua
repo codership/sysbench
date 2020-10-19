@@ -30,13 +30,16 @@ sysbench.cmdline.options = {
 
 
 function gen_rows(tab)
-   local i
-   for i = 1, sysbench.opt.rows do
-      insert_str = string.format("INSERT INTO %s VALUES (%d, 1, 1, 1, %d)",
-                             tab, i, i)
-      print(insert_str)
-      db_query(insert_str)
+   if sysbench.opt.rows == 0 then
+      return
    end
+   local i
+   local t = { }
+   t[1] = string.format("INSERT INTO %s VALUES (1, 1, 1, 1, 1)", tab)
+   for i = 2, sysbench.opt.rows do
+      t[#t + 1] = string.format(", (%d, 1, 1, 1, %d)", i ,i)
+   end
+   db_query(table.concat(t, ""))
 end
 
 function prepare()
@@ -67,29 +70,57 @@ end
 
 -- Weights of queries, see query_ops table below.
 query_weights = { }
+query_distribution = { }
 
-function compute_weights()
+function compute_weights(thread_id)
+   local i
    local so = sysbench.opt
    local w = {}
-   w[1] = so.selects or 0.0
-   w[2] = so.inserts or 0.0
-   w[3] = so.updates or 0.0
-   w[4] = so.deletes or 0.0
+   w[1] = so.selects
+   w[2] = so.inserts
+   w[3] = so.updates
+   w[4] = so.deletes
 
    local total_weight = 0.0
    for i = 1, 4 do
       total_weight = total_weight + w[i]
    end
+
+   if total_weight == 0 then
+      error("Some of selects, inserts, updates, deletes must be non-zero.")
+   end
+
    for i = 1, 4 do
       query_weights[i] = w[i]/total_weight
    end
-   print(query_weights[1], query_weights[2], query_weights[3], query_weights[4])
+
+   for i = 1, 4 do
+      query_distribution[i] = 0
+   end
+
+   print("Thread", thread_id, query_weights[1], query_weights[2], query_weights[3], query_weights[4])
 end
 
-function thread_init()
+function print_query_distribution(thread_id)
+   local total = 0.0
+   for i = 1, 4 do
+      total = total + query_distribution[i]
+   end
+   print("Thread", thread_id,
+         query_distribution[1]/total,
+         query_distribution[2]/total,
+         query_distribution[3]/total,
+         query_distribution[4]/total)
+end
+
+function thread_init(thread_id)
    drv = sysbench.sql.driver()
    con = drv:connect()
-   compute_weights()
+   compute_weights(thread_id)
+end
+
+function thread_done(thread_id)
+   print_query_distribution(thread_id)
 end
 
 function begin()
@@ -169,10 +200,13 @@ query_ops = {
    delete_fun
 }
 
+-- Produces random query type with distribution given by
+-- query_weights.
 function query_type()
    rnd = math.random()
    for i = 1, 4 do
       if rnd < query_weights[i] then
+         query_distribution[i] = query_distribution[i] + 1
          return i
       end
       rnd = rnd - query_weights[i]
