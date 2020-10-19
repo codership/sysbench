@@ -19,7 +19,7 @@ sysbench.cmdline.options = {
    selects = {"Weight of select queries in the load.", 70},
    updates = {"Weight of update queries in the load.", 20},
    inserts = {"Weight of insert queries in the load.", 6},
-   replaces = {"Weight of replace queries in the load.", 6},
+   -- replaces = {"Weight of replace queries in the load.", 6},
    deletes = {"Weight of delete queries in the load.", 4},
    rollbacks = {"Fraction of rollbacks instead of commits.", 0.1},
    unique = {"Create unique index on table.", false},
@@ -65,10 +65,31 @@ function cleanup()
    db_disconnect()
 end
 
+-- Weights of queries, see query_ops table below.
+query_weights = { }
+
+function compute_weights()
+   local so = sysbench.opt
+   local w = {}
+   w[1] = so.selects or 0.0
+   w[2] = so.inserts or 0.0
+   w[3] = so.updates or 0.0
+   w[4] = so.deletes or 0.0
+
+   local total_weight = 0.0
+   for i = 1, 4 do
+      total_weight = total_weight + w[i]
+   end
+   for i = 1, 4 do
+      query_weights[i] = w[i]/total_weight
+   end
+   print(query_weights[1], query_weights[2], query_weights[3], query_weights[4])
+end
+
 function thread_init()
    drv = sysbench.sql.driver()
    con = drv:connect()
-   total_weight = 
+   compute_weights()
 end
 
 function begin()
@@ -111,6 +132,10 @@ function insert_fun()
                            tab, pk, 1, 1, 1, uk))
 end
 
+function update_unique()
+   return string.format(", u = %d", random_uk())
+end
+
 function update_where()
    return string.format("WHERE p = %d", random_pk())
 end
@@ -118,12 +143,11 @@ end
 function update_fun()
    tab = random_table()
    rnd = math.random(1, 65536)
-   where = update_where()
    update_str = string.format([[UPDATE %s SET
           x = (x + 1) %% 65537,
           y = ((y * x) %% 65537 + (%d * y) %% 65537 + (y * z) %% 65537) %% 65537,
           z = ((z * x) %% 65537 + (z * y) %% 65537 + (%d * z) %% 65537) %% 65537
-          %s]], tab, rnd, rnd, where)
+          %s %s]], tab, rnd, rnd, update_unique(), update_where())
    con:query(update_str)
 end
 
@@ -135,7 +159,6 @@ function delete_fun()
    tab = random_table()
    where = delete_where()
    delete_str = string.format("DELETE FROM %s %s", tab, where)
-   print(delete_str)
    con:query(delete_str)
 end
 
@@ -146,14 +169,26 @@ query_ops = {
    delete_fun
 }
 
-function run_autocommit()
-   local query_type = math.random(1, 4)
-   query_ops[query_type]()
+function query_type()
+   rnd = math.random()
+   for i = 1, 4 do
+      if rnd < query_weights[i] then
+         return i
+      end
+      rnd = rnd - query_weights[i]
+   end
+   assert(nil)
+end
+
+function run_query()
+   query_ops[query_type()]()
 end
 
 function run_transaction()
    begin()
-
+   for i = sysbench.opt.trans_min, sysbench.opt.trans_max do
+      run_query()
+   end
    commit()
 end
 
@@ -163,7 +198,7 @@ function event()
       con:reconnect()
    end
    if math.random() < sysbench.opt.ac_frac then
-      run_autocommit()
+      run_query()
    else
       run_transaction()
    end
