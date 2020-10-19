@@ -237,3 +237,36 @@ function event()
       run_transaction()
    end
 end
+
+function check_distinct(con, tab, col, prim_sec)
+   local rs = con:query(
+      string.format("SELECT COUNT(*) = COUNT(DISTINCT %s) FROM %s", col, tab))
+   assert(rs.nrows == 1)
+   row = rs:fetch_row()
+   local val = tonumber(row[1])
+   if val ~= 1 then
+      error(string.format(
+               "Rows count does not match distinct keys count for: %s",
+               prim_sec))
+   else
+      print("Keys ok:", prim_sec)
+   end
+end
+
+function check_fun()
+   local i, row
+   local drv = sysbench.sql.driver()
+   local con = drv:connect()
+
+   for i = 1, sysbench.opt.tables do
+      check_distinct(con, string.format("comm%d", i), "p", "PRIMARY")
+      if sysbench.opt.unique then
+         check_distinct(con, string.format("comm%d", i), "u", "UNIQUE")
+      end
+   end
+   con:disconnect()
+end
+
+sysbench.cmdline.commands = {
+   check = {check_fun}
+}
