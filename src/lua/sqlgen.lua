@@ -23,8 +23,8 @@ sysbench.cmdline.options = {
    deletes = {"Weight of delete queries in the load.", 4},
    rollbacks = {"Fraction of rollbacks instead of commits.", 0.1},
    unique = {"Create unique index on table.", false},
-   update_primary = {"Updates change primary column.", false},
-   update_unique = {"Updates change unique column.", false},
+   -- update_primary = {"Updates change primary column.", false},
+   -- update_unique = {"Updates change unique column.", false},
    reconnect_frac = {"Fraction of transactions which cause reconnect.", 0.01}
 }
 
@@ -238,11 +238,19 @@ function event()
    end
 end
 
+function print_count(con, tab)
+   local rs = con:query(
+      string.format("SELECT COUNT(*) FROM %s", tab))
+   assert(rs.nrows == 1)
+   local row = rs:fetch_row()
+   print("Number of rows in table: ", tab, row[1])
+end
+
 function check_distinct(con, tab, col, prim_sec)
    local rs = con:query(
       string.format("SELECT COUNT(*) = COUNT(DISTINCT %s) FROM %s", col, tab))
    assert(rs.nrows == 1)
-   row = rs:fetch_row()
+   local row = rs:fetch_row()
    local val = tonumber(row[1])
    if val ~= 1 then
       error(string.format(
@@ -259,6 +267,8 @@ function check_fun()
    local con = drv:connect()
 
    for i = 1, sysbench.opt.tables do
+      local tab = string.format("comm%d", i)
+      print_count(con, tab)
       check_distinct(con, string.format("comm%d", i), "p", "PRIMARY")
       if sysbench.opt.unique then
          check_distinct(con, string.format("comm%d", i), "u", "UNIQUE")
