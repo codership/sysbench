@@ -28,6 +28,8 @@ dist_pkgdata_SCRIPTS = bulk_insert.lua \
              select_random_points.lua \
              select_random_ranges.lua \
              sqlgen.lua \
-             update_blob.lua
+             update_blob.lua \
+             oltp_read_write_xa.lua \
+             elle_list_append.lua
 
 dist_pkgdata_DATA = oltp_common.lua
