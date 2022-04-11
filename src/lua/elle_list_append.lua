@@ -22,21 +22,16 @@
 --
 --
 -- Elle-cli: https://github.com/ligurio/elle-cli
--- Tested to work with version 0.1.2 most of the time. Sometimes
--- Elle is unable to explain relationships between two transactions,
--- this might be data import problem in elle-cli, the same histories
--- work fine when working with Elle directly.
--- Now open bug https://github.com/ligurio/elle-cli/issues/30.
 --
--- Command line example for finding all G1 anomalies:
+-- Command line example for testing PL-2 level:
 --
 --        lein run \
 --                  --model elle-list-append \
---                  --consistency-models repeatable-read \
+--                  --consistency-models PL-2 \
 --                  --cycle-search-timeout 60000 \
 --                  --directory ./out \
 --                  --plot-timeout 60000 \
---                  ../sysbench/list_append.edn
+--                  ./list_append.edn
 --
 
 sysbench.cmdline.options = {
