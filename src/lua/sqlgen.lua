@@ -1,4 +1,4 @@
--- Copyright (C) 2020 Codership Oy <info@codership.com>
+-- Copyright (C) 2020-2022 Codership Oy <info@codership.com>
 --
 -- This script implements load generator similar to sqlgen tool.
 --
@@ -23,9 +23,12 @@ sysbench.cmdline.options = {
    deletes = {"Weight of delete queries in the load.", 4},
    rollbacks = {"Fraction of rollbacks instead of commits.", 0.1},
    unique = {"Create unique index on table.", false},
+   locking_selects = {"Run selects with LOCK IN SHARE MODE", false},
+   range_select_frac = {"Fraction of range selects in workload", 0.1},
    -- update_primary = {"Updates change primary column.", false},
    -- update_unique = {"Updates change unique column.", false},
-   reconnect_frac = {"Fraction of transactions which cause reconnect.", 0.01}
+   reconnect_frac = {"Fraction of transactions which cause reconnect.", 0.01},
+   print_queries = {"Print executed queries", false}
 }
 
 
@@ -47,11 +50,17 @@ function prepare()
    db_connect()
    for i = 1, sysbench.opt.tables do
       tab = string.format("comm%d", i)
-      unique_key = sysbench.opt.unique and "UNIQUE KEY" or ""
+      unique_key = ""
+      key = ""
+      if sysbench.opt.unique then
+         unique_key = "UNIQUE KEY"
+      else
+         key = ", KEY (u)"
+      end
       create_str = string.format(
          [[CREATE TABLE IF NOT EXISTS %s
-            (p INT PRIMARY KEY, x INT, y INT, z INT, u INT %s)]],
-         tab, unique_key)
+            (p INT PRIMARY KEY, x INT, y INT, z INT, u INT %s %s)]],
+         tab, unique_key, key)
       print(create_str)
       db_query(create_str)
       gen_rows(tab)
@@ -123,16 +132,26 @@ function thread_done(thread_id)
    print_query_distribution(thread_id)
 end
 
+current_query = nil
+
+function exec_query(query)
+   if (sysbench.opt.print_queries) then
+      print(query)
+   end
+   current_query = query
+   con:query(query)
+end
+
 function begin()
-   con:query("BEGIN")
+   exec_query("BEGIN")
 end
 
 function commit()
-   con:query("COMMIT")
+   exec_query("COMMIT")
 end
 
 function rollback()
-   con:query("ROLLBACK")
+   exec_query("ROLLBACK")
 end
 
 function random_table()
@@ -140,27 +159,37 @@ function random_table()
 end
 
 function random_pk()
-   return math.random(1, sysbench.opt.max_rows)
+   return math.random(1, math.max(sysbench.opt.rows, sysbench.opt.max_rows))
 end
 
 function random_uk()
-   return math.random(1, sysbench.opt.max_rows)
+   return math.random(1, math.max(sysbench.opt.rows, sysbench.opt.max_rows))
 end
 
 function select_fun()
    tab = random_table()
    pk = random_pk()
-   select_str = string.format("SELECT p, x, y, z, u FROM %s WHERE p = %d",
-                              tab, pk)
-   con:query(select_str)
+   lock_in_share_mode = ""
+   if sysbench.opt.locking_selects then
+      lock_in_share_mode = "LOCK IN SHARE MODE"
+   end
+   if math.random() < sysbench.opt.range_select_frac then
+      where = string.format("p > %d", pk)
+   else
+      where = string.format("p = %d", pk)
+   end
+   select_str = string.format("SELECT p, x, y, z, u FROM %s WHERE %s %s",
+                              tab, where, lock_in_share_mode)
+   exec_query(select_str)
 end
 
 function insert_fun()
    tab = random_table()
    pk = random_pk()
    uk = random_uk()
-   con:query(string.format("INSERT INTO %s VALUES (%d, %d, %d, %d, %d)",
-                           tab, pk, 1, 1, 1, uk))
+   query = string.format("INSERT INTO %s VALUES (%d, %d, %d, %d, %d)",
+                         tab, pk, 1, 1, 1, uk)
+   exec_query(query)
 end
 
 function update_unique()
@@ -179,7 +208,7 @@ function update_fun()
           y = ((y * x) %% 65537 + (%d * y) %% 65537 + (y * z) %% 65537) %% 65537,
           z = ((z * x) %% 65537 + (z * y) %% 65537 + (%d * z) %% 65537) %% 65537
           %s %s]], tab, rnd, rnd, update_unique(), update_where())
-   con:query(update_str)
+   exec_query(update_str)
 end
 
 function delete_where()
@@ -190,7 +219,7 @@ function delete_fun()
    tab = random_table()
    where = delete_where()
    delete_str = string.format("DELETE FROM %s %s", tab, where)
-   con:query(delete_str)
+   exec_query(delete_str)
 end
 
 query_ops = {
@@ -236,6 +265,19 @@ function event()
    else
       run_transaction()
    end
+end
+
+-- Handle ignorable errors
+function sysbench.hooks.before_restart_event(errdesc)
+   -- print("Query: "
+      -- .. (current_query or "(nil)") .. " error " .. errdesc.sql_errno)
+   if errdesc.sql_errno == 1213    -- ER_LOCK_DEADLOCK
+      or errdesc.sql_errno == 1180 -- ER_ERROR_DURING_COMMIT
+      or errdesc.sql_errno == 1205 -- ER_LOCK_WAIT_TIMEOUT
+   then
+      con:query("ROLLBACK")
+   end
+   current_query = nil
 end
 
 function print_count(con, tab)
